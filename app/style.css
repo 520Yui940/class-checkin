@@ -1,0 +1,73 @@
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #f4f5f7;
+  color: #1f2328;
+  font-size: 16px;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+.hidden { display: none !important; }
+.wrap { max-width: 560px; margin: 0 auto; padding: 14px 14px 40px; }
+.card { background: #fff; border: 1px solid #e3e5e8; border-radius: 14px; padding: 16px; margin-bottom: 12px; }
+h1 { font-size: 19px; margin: 0 0 4px; font-weight: 600; }
+h2 { font-size: 16px; margin: 0 0 10px; font-weight: 600; }
+h3 { font-size: 14px; margin: 16px 0 8px; font-weight: 600; color: #57606a; }
+p { margin: 6px 0; }
+.muted { color: #6b7280; font-size: 13px; }
+.tiny { font-size: 12px; color: #8b949e; }
+.center { text-align: center; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 100%; padding: 13px 16px; border-radius: 11px; border: 1px solid #d5d8dc;
+  background: #fff; color: #1f2328; font-size: 16px; font-weight: 500; cursor: pointer;
+  font-family: inherit; margin-top: 8px;
+}
+.btn:active { transform: scale(0.985); }
+.btn[disabled] { opacity: .5; }
+.btn-primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+.btn-dark { background: #1f2328; border-color: #1f2328; color: #fff; }
+.btn-danger { background: #fff; border-color: #f0a1a1; color: #b42318; }
+.btn-sm { width: auto; padding: 7px 12px; font-size: 14px; margin: 0; border-radius: 9px; }
+.btn-lg { padding: 18px 16px; font-size: 18px; }
+.row { display: flex; gap: 8px; align-items: center; }
+.row > * { flex: 1; }
+.row.tight > * { flex: 0 0 auto; }
+input, select {
+  width: 100%; padding: 12px 13px; border: 1px solid #d5d8dc; border-radius: 10px;
+  font-size: 16px; font-family: inherit; background: #fff; color: #1f2328;
+}
+input:focus, select:focus { outline: 2px solid #bfd4fb; border-color: #2563eb; }
+.field { margin-bottom: 10px; }
+.field label { display: block; font-size: 13px; color: #57606a; margin-bottom: 5px; }
+.tag { display: inline-block; padding: 1px 7px; border-radius: 6px; font-size: 12px; margin-left: 6px; vertical-align: 1px; }
+.tag-ok { background: #e8f5ec; color: #1a7f37; }
+.tag-leave { background: #eef1f5; color: #4b5563; }
+.tag-warn { background: #fdf1e3; color: #9a5b00; }
+.tag-bad { background: #fdecec; color: #b42318; }
+.tag-gray { background: #f1f2f4; color: #6b7280; }
+.list { margin: 0; padding: 0; list-style: none; }
+.list li { display: flex; align-items: center; gap: 8px; padding: 9px 2px; border-bottom: 1px solid #f0f1f3; font-size: 15px; }
+.list li:last-child { border-bottom: 0; }
+.list li .grow { flex: 1; }
+.count { font-size: 60px; font-weight: 700; line-height: 1; letter-spacing: -1px; }
+.count small { font-size: 22px; font-weight: 500; color: #6b7280; }
+.qrbox { background: #fff; padding: 10px; border-radius: 12px; }
+.qrbox svg { width: 100%; height: auto; display: block; }
+.code-badge { font-size: 22px; letter-spacing: 3px; font-weight: 700; font-family: ui-monospace, Menlo, monospace; }
+.stu-body { padding: 26px 16px; }
+.stu-title { font-size: 22px; font-weight: 600; margin: 4px 0 2px; }
+.stu-name { font-size: 26px !important; text-align: center; letter-spacing: 4px; padding: 16px 10px !important; }
+.result-big { font-size: 44px; font-weight: 700; }
+.notice { padding: 11px 13px; border-radius: 10px; font-size: 14px; margin-top: 10px; }
+.notice-info { background: #eef4ff; color: #1d4ed8; }
+.notice-ok { background: #e8f5ec; color: #1a7f37; }
+.notice-warn { background: #fdf1e3; color: #9a5b00; }
+.notice-bad { background: #fdecec; color: #b42318; }
+.divider { height: 1px; background: #eef0f2; margin: 14px 0; }
+.hist { display: flex; justify-content: space-between; align-items: baseline; }
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.toolbar .btn { width: auto; margin: 0; padding: 8px 12px; font-size: 14px; }
+.spin { display: inline-block; width: 15px; height: 15px; border: 2px solid #cfd4da; border-top-color: #2563eb; border-radius: 50%; animation: sp .8s linear infinite; vertical-align: -2px; }
+@keyframes sp { to { transform: rotate(360deg); } }

@@ -1,0 +1,10 @@
+{
+  "name": "class-checkin",
+  "version": "2.0.0",
+  "private": true,
+  "description": "课堂点名：班长端扫码点名 + 同学端姓名签到",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

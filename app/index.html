@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>课堂点名</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="boot" class="wrap center" style="padding-top:80px">
+  <p class="muted"><span class="spin"></span> 加载中…</p>
+</div>
+
+<!-- ============ 同学端 ============ -->
+<section id="view-student" class="hidden">
+  <div class="wrap stu-body">
+    <div class="center">
+      <div class="tiny" id="stu-course"></div>
+      <div class="stu-title">课堂签到</div>
+      <div class="muted" id="stu-sub">请输入你的姓名完成签到</div>
+    </div>
+
+    <div id="stu-consent" class="hidden">
+      <div class="card" style="margin-top:14px">
+        <div class="stu-title">签到前请先阅读并同意</div>
+        <div class="notice notice-info" style="text-align:left">
+          <b>会记录</b>：你填的姓名、提交时间、设备标识与设备特征、IP 地址、定位坐标（<b>仅当你允许定位</b>）<br>
+          <b>用途</b>：核对出勤、防止一部手机替多人签到<br>
+          <b>不收集</b>：剪贴板内容、通讯录、相册、短信、手机序列号、IMEI、手机号、微信号<br>
+          <b>唯一第三方</b>：服务端把 IP（不含姓名）发给 ipwho.is 查归属地<br>
+          <b>你的选择</b>：定位可以拒绝，签到照常，但该条会标注「未提供定位」
+        </div>
+        <button class="btn btn-primary" id="btn-consent-ok">我已阅读并同意《隐私说明》</button>
+        <button class="btn btn-sm" id="btn-consent-more" style="width:100%">查看完整说明</button>
+        <p class="tiny center">不同意就无法使用线上签到，请线下向班长说明，由班长手工记录。</p>
+      </div>
+    </div>
+
+    <div id="stu-form" class="hidden">
+      <div class="card" style="margin-top:18px">
+        <input id="stu-name" class="stu-name" type="text" inputmode="text" autocomplete="off"
+               autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="10" placeholder="你的姓名">
+        <p class="tiny center" id="stu-name-hint">只支持中文姓名（2-10 个字）</p>
+        <button class="btn btn-primary btn-lg" id="stu-submit">签 到</button>
+      </div>
+      <p class="tiny center">签到会记录提交时间、设备与定位信息，用于核对<br>
+        <a href="privacy.html" style="color:#2563eb">《隐私说明》</a></p>
+    </div>
+
+    <div id="stu-done" class="hidden center" style="margin-top:26px">
+      <div class="result-big" style="color:#1a7f37">✓</div>
+      <div class="stu-title" id="stu-done-title">签到成功</div>
+      <div class="muted" id="stu-done-sub"></div>
+    </div>
+
+    <div id="stu-error" class="hidden" style="margin-top:20px">
+      <div class="notice notice-bad" id="stu-error-text"></div>
+      <button class="btn hidden" id="stu-retry">重试</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 班长端 ============ -->
+<section id="view-admin" class="hidden">
+  <div class="wrap">
+
+    <!-- 解锁（房间号 + PIN） -->
+    <div id="scr-lock" class="hidden">
+      <div class="card" style="margin-top:24px">
+        <h1>课堂点名 · 班长端</h1>
+        <div class="muted" id="lock-room"></div>
+        <div class="divider"></div>
+        <div class="field"><label>PIN 口令</label><input id="lock-pin" type="password" inputmode="numeric" maxlength="6" placeholder="6 位以内数字"></div>
+        <label class="row tight hidden" id="lock-agree-box" style="margin:10px 0;align-items:flex-start">
+          <input type="checkbox" id="lock-agree" style="width:18px;height:18px;margin-top:2px">
+          <span class="tiny" style="flex:1">我已阅读并同意<a href="privacy.html" style="color:#2563eb">《隐私说明》</a></span>
+        </label>
+        <button class="btn btn-primary" id="btn-lock-enter">进入</button>
+        <div id="lock-msg" class="notice hidden"></div>
+        <p class="tiny center" style="margin-top:14px">PIN 只锁这台手机，忘了就点下面的重置。</p>
+        <button class="btn btn-sm" id="btn-lock-reset" style="width:100%">忘记口令 / 重设班级</button>
+        <div class="divider"></div>
+        <div class="field" style="margin-bottom:0">
+          <label>同学扫不出码时，可在这里手动进签到页</label>
+          <div class="row">
+            <input id="stu-code-manual" maxlength="6" placeholder="6 位口令" style="text-transform:uppercase">
+            <button class="btn btn-sm" id="btn-stu-manual">进入签到</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 班级设置 -->
+    <div id="scr-setup" class="hidden">
+      <div class="card">
+        <h1>建一个班级</h1>
+        <p class="muted">班级信息只存在这台手机上，花名册不上传。</p>
+        <div class="field"><label>班级名</label><input id="setup-name" placeholder="如：软件工程2301"></div>
+        <div class="field"><label>房间号（自定义短标识）</label><input id="setup-code" placeholder="如：soft2301"></div>
+        <div class="field"><label>PIN 口令（4-6 位数字，自己定）</label><input id="setup-pin" type="password" inputmode="numeric" maxlength="6" placeholder="4-6 位数字"></div>
+        <div class="field"><label>再输一遍 PIN</label><input id="setup-pin2" type="password" inputmode="numeric" maxlength="6" placeholder="确认 PIN"></div>
+        <div class="field"><label>距离校验半径（米）</label><input id="setup-radius" type="number" value="200" inputmode="numeric"></div>
+        <label class="row tight" style="margin:10px 0;align-items:flex-start">
+          <input type="checkbox" id="setup-agree" style="width:18px;height:18px;margin-top:2px">
+          <span class="tiny" style="flex:1">我已阅读并同意<a href="privacy.html" style="color:#2563eb">《隐私说明》</a>（我是本班这批数据的管理者，会向同学说明并妥善保管导出文件）</span>
+        </label>
+        <button class="btn btn-primary" id="btn-create-room">创建班级</button>
+        <div id="setup-msg" class="notice hidden"></div>
+        <p class="tiny center" style="margin-top:14px">同学扫码签到会记录设备标识与定位（可拒绝定位）<br><a href="privacy.html" style="color:#2563eb">《隐私说明》</a></p>
+      </div>
+    </div>
+
+    <!-- 首页 -->
+    <div id="scr-home" class="hidden">
+      <div class="card">
+        <div class="hist">
+          <div><h1 id="home-room-name">班级</h1><div class="muted" id="home-room-code"></div></div>
+          <button class="btn btn-sm" id="btn-logout">退出</button>
+        </div>
+        <div class="divider"></div>
+        <div class="hist">
+          <div class="muted">在册人数</div><div><b id="home-stu-count">0</b> 人</div>
+        </div>
+        <div class="hist" style="margin-top:6px">
+          <div class="muted">上次点名</div><div class="tiny" id="home-last">暂无</div>
+        </div>
+      </div>
+      <div class="field"><label>本次课程名（可留空）</label><input id="home-course" maxlength="20" placeholder="如：高等数学"></div>
+      <button class="btn btn-primary btn-lg" id="btn-start">开始点名</button>
+      <div id="home-msg" class="notice hidden"></div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn" id="btn-goto-roster">花名册</button>
+        <button class="btn" id="btn-goto-history">历史记录</button>
+      </div>
+      <p class="tiny center" style="margin-top:14px">二维码只投屏或现场传扫，任何情况下不要发到班群。</p>
+      <p class="tiny center" style="margin-top:8px"><a href="privacy.html" style="color:#2563eb">《隐私说明》</a></p>
+    </div>
+
+    <!-- 进行中 -->
+    <div id="scr-live" class="hidden">
+      <div class="card">
+        <div class="center">
+          <div class="muted" id="live-course"></div>
+          <div class="count"><span id="live-count">0</span><small id="live-total">/0</small></div>
+          <div class="tiny" id="live-hint">已到人数</div>
+        </div>
+        <div class="qrbox" id="live-qr" style="margin-top:12px"></div>
+        <div class="center" style="margin-top:10px">
+          <div class="muted">扫码打不开时，让同学输入房间口令</div>
+          <div class="code-badge" id="live-code">------</div>
+        </div>
+      </div>
+      <div class="card" id="live-flags-card" style="display:none">
+        <div class="muted" id="live-flags"></div>
+      </div>
+      <div class="card" id="live-reject-card" style="display:none">
+        <div class="muted" id="live-reject-title"></div>
+        <ul class="list" id="live-reject-list"></ul>
+        <p class="tiny" style="margin-top:8px">一部手机只能签一个名字。两人共用一部手机时，点「放行」再让对方重试。</p>
+      </div>
+      <div class="card">
+        <div class="tiny" id="live-roster"></div>
+        <button class="btn btn-sm" id="btn-sync-roster" style="margin-top:8px">重新同步名单</button>
+      </div>
+      <button class="btn btn-dark btn-lg" id="btn-close-session">结束点名</button>
+    </div>
+
+    <!-- 点名结果 -->
+    <div id="scr-report" class="hidden">
+      <div class="card">
+        <h1 id="report-title">点名结果</h1>
+        <div class="muted" id="report-sub"></div>
+        <div class="divider"></div>
+        <div class="hist"><div>已到 <span class="tag tag-ok" id="report-n-ok">0</span></div><div class="tiny">未到 <span id="report-n-miss">0</span> · 请假 <span id="report-n-leave">0</span> · 异常 <span id="report-n-flag">0</span></div></div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">未到名单</h3>
+        <ul class="list" id="report-miss"></ul>
+        <div class="toolbar" style="margin-top:10px">
+          <button class="btn" id="btn-copy-leaves">复制上次请假名单</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">已到名单</h3>
+        <ul class="list" id="report-ok"></ul>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">请假名单</h3>
+        <ul class="list" id="report-leave-list"></ul>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">异常与留证</h3>
+        <ul class="list" id="report-flag"></ul>
+      </div>
+      <div class="row">
+        <button class="btn btn-primary" id="btn-export-xlsx">导出 Excel</button>
+        <button class="btn" id="btn-export-csv">导出 CSV</button>
+      </div>
+      <button class="btn" id="btn-back-home">返回首页</button>
+      <div id="report-msg" class="notice hidden"></div>
+    </div>
+
+    <!-- 历史 -->
+    <div id="scr-history" class="hidden">
+      <div class="card">
+        <div class="hist"><h1>历史记录</h1><button class="btn btn-sm" id="btn-hist-back">返回</button></div>
+        <ul class="list" id="hist-list"></ul>
+      </div>
+    </div>
+
+    <!-- 花名册 -->
+    <div id="scr-roster" class="hidden">
+      <div class="card">
+        <div class="hist"><h1>花名册</h1><button class="btn btn-sm" id="btn-roster-back">返回</button></div>
+        <p class="muted" id="roster-info"></p>
+        <div class="toolbar">
+          <button class="btn" id="btn-import">导入 Excel / CSV</button>
+          <button class="btn" id="btn-add-stu">手动加人</button>
+        </div>
+        <input type="file" id="file-input" accept=".xlsx,.xls,.csv" class="hidden">
+        <ul class="list" id="roster-list"></ul>
+      </div>
+      <div id="roster-msg" class="notice hidden"></div>
+    </div>
+
+  </div>
+</section>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

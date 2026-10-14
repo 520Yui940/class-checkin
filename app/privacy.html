@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>隐私说明 · 课堂点名</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+
+  <div class="card">
+    <h1>隐私说明</h1>
+    <p class="tiny">课堂点名 · 应用版本 v2.1.0 · 最后更新 2026-10-15</p>
+    <p class="muted">本应用只在班级内部使用，班长是这批数据的管理者。下面逐项说明：<b>收集什么、为什么收集、放在哪里、怎么删</b>。</p>
+  </div>
+
+  <div class="card">
+    <h2>一、同学端（扫码签到）会记录什么</h2>
+    <ul class="list">
+      <li><span class="grow">你填写的姓名<br><span class="tiny">与花名册比对，判断谁到了</span></span></li>
+      <li><span class="grow">提交时间<br><span class="tiny">出勤时间，供事后核对</span></span></li>
+      <li><span class="grow">设备标识<br><span class="tiny">浏览器里的一串随机字符，防止一部手机替多人签到</span></span></li>
+      <li><span class="grow">设备特征<br><span class="tiny">屏幕尺寸、时区、语言、处理器核数、已装字体与渲染特征（哈希后）</span></span></li>
+      <li><span class="grow">IP 地址<br><span class="tiny">判断是否校外/境外提交、是否机房代理出口</span></span></li>
+      <li><span class="grow">定位坐标与精度（<b>仅当你允许定位</b>）<br><span class="tiny">判断提交时是否在教室附近</span></span></li>
+    </ul>
+    <p class="muted" style="margin-top:12px"><b>不收集</b>：剪贴板内容、通讯录、相册、短信、通话记录、手机序列号、IMEI、手机号、微信号。页面上没有任何第三方广告或统计脚本。</p>
+  </div>
+
+  <div class="card">
+    <h2>二、关于 cookie 和本地存储</h2>
+    <p class="muted">我们会在你的浏览器里写入下面这些数据（都在你自己手机里，除签到记录外不上传）：</p>
+    <ul class="list">
+      <li><span class="grow"><b>ck_device_id</b>（cookie + localStorage + sessionStorage）<br>
+        <span class="tiny">一串随机字符，用来认出"这台设备"，防止一部手机签多个人。<b>它不是你的手机序列号</b>，无法用它识别你的真实身份。</span></span></li>
+      <li><span class="grow"><b>ck_device_hist</b>（cookie + localStorage）<br>
+        <span class="tiny">这台设备用过的历史随机标识，用来识别"清了缓存换身份再签一次"的行为。</span></span></li>
+      <li><span class="grow"><b>ck_profile / ck_roster_* / ck_history_*</b>（仅班长端）<br>
+        <span class="tiny">班级设置、花名册、点名记录，只存在班长手机本地，不上传。</span></span></li>
+    </ul>
+    <p class="muted" style="margin-top:12px">你可以随时在浏览器设置里清除这些数据。清除后不影响当次签到，只是系统会把你这台设备当成"新设备"。</p>
+    <p class="muted"><b>关于班级名单</b>：为了拒收不在名单里的名字，班长发起点名时会把<b>姓名的哈希值（不可逆，加随机盐）</b>随场次上传，
+      服务端只保存哈希值，<b>看不到也存不下任何姓名明文</b>。花名册本身仍只存在班长手机里。</p>
+  </div>
+
+  <div class="card">
+    <h2>三、第三方</h2>
+    <p class="muted">为了判断提交是否来自机房/代理出口，服务端会把<b>提交所使用的 IP（不含姓名）</b>发送给 ipwho.is 查询归属地。除此之外不向任何第三方提供数据。</p>
+  </div>
+
+  <div class="card">
+    <h2>四、保存多久、谁能看</h2>
+    <ul class="list">
+      <li><span class="grow">只有 <b data-cfg="operator">本班班长</b>（房间号 + PIN）能查看和导出点名记录</span></li>
+      <li><span class="grow">记录保留到班长主动删除为止</span></li>
+      <li><span class="grow">想删掉自己某条记录：直接找 <b data-cfg="operator">本班班长</b></span></li>
+      <li><span class="grow">导出的 Excel/CSV 由班长保管，请勿转发给无关人员</span></li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>五、不想被记录怎么办</h2>
+    <ul class="list">
+      <li><span class="grow"><b>位置</b>：可以拒绝定位授权，签到照样能完成，但这条记录会被标注「未提供定位」</span></li>
+      <li><span class="grow">其余信息是完成点名所必需的；不接受的话，请线下向班长说明，由班长手工记录</span></li>
+    </ul>
+  </div>
+
+  <p class="tiny center" style="margin:18px 0 40px">课堂点名 · 本说明随功能变更更新</p>
+
+</div>
+<script src="config.js"></script>
+<script>
+(function(){
+  var op = (window.APP_CONFIG && window.APP_CONFIG.operator) || '本班班长';
+  var nodes = document.querySelectorAll('[data-cfg="operator"]');
+  for (var i = 0; i < nodes.length; i++) nodes[i].textContent = op;
+})();
+</script>
+</body>
+</html>

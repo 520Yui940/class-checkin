@@ -1,0 +1,61 @@
+plugins {
+    id 'com.android.application'
+}
+
+// 站点域名：优先用 -PsiteHost=xxx 或 gradle.properties 里的 siteHost
+def siteHost = project.findProperty('siteHost') ?: 'class-checkin-41536.app.workbuddy.host'
+
+def keystorePropsFile = rootProject.file('keystore.properties')
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystoreProps.load(new FileInputStream(keystorePropsFile))
+}
+
+android {
+    namespace 'com.classcheckin.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.classcheckin.app'
+        minSdk 24
+        targetSdk 34
+        versionCode 2
+        versionName '1.0.1'
+        buildConfigField "String", "SITE_HOST", "\"${siteHost}\""
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    signingConfigs {
+        release {
+            if (keystorePropsFile.exists()) {
+                storeFile rootProject.file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix '.debug'
+        }
+        release {
+            minifyEnabled false
+            shrinkResources false
+            signingConfig keystorePropsFile.exists() ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError false
+    }
+}
