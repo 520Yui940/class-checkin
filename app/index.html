@@ -41,7 +41,7 @@
       <div class="card" style="margin-top:18px">
         <input id="stu-name" class="stu-name" type="text" inputmode="text" autocomplete="off"
                autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="10" placeholder="你的姓名">
-        <p class="tiny center" id="stu-name-hint">只支持中文姓名（2-10 个字）</p>
+        <p class="tiny center" id="stu-name-hint">只支持中文姓名（2-15 个字）</p>
         <button class="btn btn-primary btn-lg" id="stu-submit">签 到</button>
       </div>
       <p class="tiny center">签到会记录提交时间、设备与定位信息，用于核对<br>
@@ -101,6 +101,10 @@
         <div class="field"><label>PIN 口令（4-6 位数字，自己定）</label><input id="setup-pin" type="password" inputmode="numeric" maxlength="6" placeholder="4-6 位数字"></div>
         <div class="field"><label>再输一遍 PIN</label><input id="setup-pin2" type="password" inputmode="numeric" maxlength="6" placeholder="确认 PIN"></div>
         <div class="field"><label>距离校验半径（米）</label><input id="setup-radius" type="number" value="200" inputmode="numeric"></div>
+        <label class="row tight" style="margin:6px 0;align-items:flex-start">
+          <input type="checkbox" id="setup-ipcheck" checked style="width:18px;height:18px;margin-top:2px">
+          <span class="tiny" style="flex:1">启用 IP 归属地校验（判断境外/机房代刷）。开启后服务端会把学生 IP 发给第三方 ipwho.is 查询；关掉则不做这项判定。</span>
+        </label>
         <label class="row tight" style="margin:10px 0;align-items:flex-start">
           <input type="checkbox" id="setup-agree" style="width:18px;height:18px;margin-top:2px">
           <span class="tiny" style="flex:1">我已阅读并同意<a href="privacy.html" style="color:#2563eb">《隐私说明》</a>（我是本班这批数据的管理者，会向同学说明并妥善保管导出文件）</span>
@@ -195,6 +199,7 @@
       </div>
       <div class="row">
         <button class="btn btn-primary" id="btn-export-xlsx">导出 Excel</button>
+        <button class="btn btn-sm" id="btn-del-session" style="width:100%;margin-top:8px">删除这次记录</button>
         <button class="btn" id="btn-export-csv">导出 CSV</button>
       </div>
       <button class="btn" id="btn-back-home">返回首页</button>
@@ -205,7 +210,10 @@
     <div id="scr-history" class="hidden">
       <div class="card">
         <div class="hist"><h1>历史记录</h1><button class="btn btn-sm" id="btn-hist-back">返回</button></div>
+        <p class="tiny">本机与云端都只保留最近 60 场，超出自动淘汰；要长期保存请导出。删掉的记录无法恢复。</p>
         <ul class="list" id="hist-list"></ul>
+        <button class="btn btn-sm" id="btn-hist-clear" style="width:100%;margin-top:10px">清空全部历史（本机 + 云端）</button>
+        <div id="hist-msg" class="notice hidden"></div>
       </div>
     </div>
 

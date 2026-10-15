@@ -4,7 +4,8 @@
   'use strict';
 
   var CFG = window.APP_CONFIG || {};
-  var CN_NAME = /^[\u4e00-\u9fa5·]{2,10}$/;
+  // 覆盖全部汉字（含扩展 A/B 区生僻字）+ 间隔号「·」，2-15 字（照顾少数民族音译姓名）
+  var CN_NAME = /^[\p{Script=Han}·]{2,15}$/u;
   // 隐私条款版本：改动《隐私说明》内容时必须同步 +1，用户会被要求重新确认
   var PRIVACY_VER = '2026-10-15';
   var state = { profile: null, roster: [], session: null, subs: [], rejects: [], timer: null, report: null, history: [] };
@@ -189,7 +190,7 @@
     return (h1 >>> 0).toString(36) + (h2 >>> 0).toString(36);
   }
   function getGeo(timeoutMs) {
-    timeoutMs = timeoutMs || 4500;
+    timeoutMs = timeoutMs || 8000;
     return new Promise(function (resolve) {
       if (!navigator.geolocation) return resolve({ err: 'unsupported' });
       var done = false;
@@ -207,7 +208,7 @@
           var code = e && e.code;
           finish({ err: code === 1 ? 'denied' : (code === 3 ? 'timeout' : 'unavailable') });
         },
-        { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 60000 }
+        { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 0 }
       );
     });
   }
@@ -253,11 +254,18 @@
   /* ---------------- 接口 ---------------- */
   async function api(method, path, body) {
     var opt = { method: method, headers: {} };
+    // 口令放请求头，避免出现在 URL / 访问日志 / 浏览器历史里
+    if (state.profile && state.profile.pinKey) opt.headers['X-Pin-Key'] = state.profile.pinKey;
     if (method === 'POST') { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body || {}); }
     for (var i = 0; i < 3; i++) {
       try {
         var r = await fetch(path, opt);
-        var data = await r.json();
+        var data = null;
+        try { data = await r.json(); } catch (e) { data = null; }
+        // 4xx 是确定性失败（口令不对/不存在），重试没有意义，只会让班长多等
+        if (r.status >= 400 && r.status < 500) {
+          return { data: data, error: data ? null : 'HTTP ' + r.status };
+        }
         if (!r.ok && (!data || data.ok !== false)) return { error: 'HTTP ' + r.status };
         return { data: data };
       } catch (e) {
@@ -267,9 +275,10 @@
     }
     return { error: 'network' };
   }
+  // 口令走 X-Pin-Key 请求头（见 api()），查询串里只留房间名
   function qs(extra) {
     var p = state.profile || {};
-    return 'room=' + encodeURIComponent(p.room || '') + '&pinKey=' + encodeURIComponent(p.pinKey || '') + (extra || '');
+    return 'room=' + encodeURIComponent(p.room || '') + (extra || '');
   }
 
   /* ================= 同学端 ================= */
@@ -330,7 +339,7 @@
     var input = $('stu-name');
     var composing = false;
     function filter() {
-      var v = input.value.replace(/[^\u4e00-\u9fa5·]/g, '').slice(0, 10);
+      var v = input.value.replace(/[^\p{Script=Han}·]/gu, '').slice(0, 15);
       if (v !== input.value) input.value = v;
       $('stu-submit').disabled = !CN_NAME.test(input.value) || stu.busy;
     }
@@ -383,14 +392,13 @@
     stu.busy = true;
     $('stu-submit').disabled = true;
     $('stu-submit').innerHTML = '<span class="spin"></span> 提交中';
-    var geo = await getGeo(4500);
+    var geo = await getGeo(8000);
     var res = await api('POST', 'api/checkin', {
       code: stu.code, name: name, fp: deviceFp(), ids: deviceFpList(), sig: deviceSig(),
       lat: geo && geo.lat != null ? geo.lat : null,
       lng: geo && geo.lng != null ? geo.lng : null,
       acc: geo && geo.acc != null ? geo.acc : null,
-      geoErr: (geo && geo.err) || null,
-      ua: (navigator.userAgent || '').slice(0, 200)
+      geoErr: (geo && geo.err) || null
     });
     stu.busy = false;
     $('stu-submit').innerHTML = '签 到';
@@ -423,10 +431,14 @@
       var key = (await sha256(room + '|' + pin)).slice(0, 32);
       notice('setup-msg', '正在检查房间号…', 'info');
       var chk = await api('GET', 'api/history?room=' + encodeURIComponent(room) + '&pinKey=' + key);
+      if (!window.isSecureContext) {
+        notice('setup-msg', '注意：当前不是 HTTPS 访问，浏览器会拒绝提供定位、加密哈希也会退化，请换 https 地址使用。', 'warn');
+      }
       if (chk.data && chk.data.message === '房间口令不对') {
         return notice('setup-msg', '房间号「' + room + '」在服务器上已有记录，但和这个 PIN 对不上：要么填回原来的 PIN，要么换一个房间号。', 'bad');
       }
-      state.profile = { className: className, room: room, pin: pin, pinKey: key, radius: radius, agreeVer: PRIVACY_VER };
+      // 只存派生出的 pinKey，不落 PIN 明文（锁屏校验用 sha256(room|pin) 比对即可）
+      state.profile = { className: className, room: room, pinKey: key, radius: radius, ipCheck: $('setup-ipcheck').checked, agreeVer: PRIVACY_VER };
       LS.set('ck_profile', state.profile);
       notice('setup-msg', '建好了', 'ok');
       enterHome();
@@ -689,6 +701,7 @@
       room: state.profile.room, pinKey: state.profile.pinKey, course: course,
       lat: geo ? geo.lat : null, lng: geo ? geo.lng : null,
       radius: state.profile.radius || 200,
+      ipCheck: state.profile.ipCheck !== false,
       nameSalt: rh.nameSalt, nameHashes: rh.nameHashes
     });
     if (!res.data || !res.data.ok) {
@@ -962,6 +975,13 @@
     });
     $('btn-export-xlsx').addEventListener('click', function () { exportReport('xlsx'); });
     $('btn-export-csv').addEventListener('click', function () { exportReport('csv'); });
+    $('btn-del-session').addEventListener('click', async function () {
+      var rec = state.report;
+      if (!rec) return;
+      await deleteRecords(rec.code);
+      renderHome();
+      adminScreen('home');
+    });
   }
 
   function reportRows() {
@@ -1049,7 +1069,8 @@
       return '<li><span class="grow">' + esc((s.course || '点名') + ' <span class="tiny">' + fmt(s.openedAt) + '</span>') +
         '</span><span class="tiny">' + (s.subs ? s.subs.length : 0) + ' 人' +
         ((s.leaves || []).length ? ' · 请假 ' + s.leaves.length : '') + '</span>' +
-        '<button class="btn btn-sm" data-local="' + esc(s.code) + '">名单</button></li>';
+        '<button class="btn btn-sm" data-local="' + esc(s.code) + '">名单</button>' +
+        '<button class="btn btn-sm" data-del="' + esc(s.code) + '">删除</button></li>';
     }).join('') : '<li class="muted">这台手机上还没有点名记录</li>';
     Array.prototype.forEach.call($('hist-list').querySelectorAll('[data-local]'), function (b) {
       b.addEventListener('click', function () {
@@ -1058,6 +1079,10 @@
         if (rec) buildReport(rec);
       });
     });
+    Array.prototype.forEach.call($('hist-list').querySelectorAll('[data-del]'), function (b) {
+      b.addEventListener('click', function () { deleteRecords(b.getAttribute('data-del')); });
+    });
+    notice('hist-msg', '', 'info');
     var res = await api('GET', 'api/history?' + qs());
     if (res.data && res.data.ok && res.data.sessions && res.data.sessions.length) {
       var have = {};
@@ -1084,10 +1109,29 @@
     }
   }
 
+  // 删除记录：云端的删掉了，本机也一起删（隐私说明里承诺过"可删除"，就必须真能删）
+  async function deleteRecords(code) {
+    var label = code === '*' ? '全部历史记录' : '这条点名记录';
+    if (!window.confirm('删除' + label + '？云端存档和本机记录都会删掉，无法恢复（已导出的文件不受影响）。')) return;
+    var r = await api('POST', 'api/delete', {
+      room: state.profile.room, pinKey: state.profile.pinKey, code: code
+    });
+    if (!r.data || !r.data.ok) {
+      notice('hist-msg', (r.data && r.data.message) || '删除失败，请检查网络后重试', 'bad');
+      return;
+    }
+    if (code === '*') state.history = [];
+    else state.history = state.history.filter(function (x) { return x.code !== code; });
+    saveHistory();
+    renderHistory();
+    notice('hist-msg', '已删除 ' + (r.data.deleted || 0) + ' 条记录', 'ok');
+  }
+
   function bindHistory() {
     if (bindHistory.done) return;
     bindHistory.done = true;
     $('btn-hist-back').addEventListener('click', function () { renderHome(); adminScreen('home'); });
+    $('btn-hist-clear').addEventListener('click', function () { deleteRecords('*'); });
   }
 
   /* ---------- 入口 ---------- */

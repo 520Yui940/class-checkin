@@ -11,7 +11,7 @@
 
   <div class="card">
     <h1>隐私说明</h1>
-    <p class="tiny">课堂点名 · 应用版本 v2.1.0 · 最后更新 2026-10-15</p>
+    <p class="tiny">课堂点名 · 应用版本 <span id="pv-ver">—</span> · 最后更新 2026-10-15</p>
     <p class="muted">本应用只在班级内部使用，班长是这批数据的管理者。下面逐项说明：<b>收集什么、为什么收集、放在哪里、怎么删</b>。</p>
   </div>
 
@@ -41,7 +41,8 @@
     </ul>
     <p class="muted" style="margin-top:12px">你可以随时在浏览器设置里清除这些数据。清除后不影响当次签到，只是系统会把你这台设备当成"新设备"。</p>
     <p class="muted"><b>关于班级名单</b>：为了拒收不在名单里的名字，班长发起点名时会把<b>姓名的哈希值（不可逆，加随机盐）</b>随场次上传，
-      服务端只保存哈希值，<b>看不到也存不下任何姓名明文</b>。花名册本身仍只存在班长手机里。</p>
+      服务端<b>只保存哈希、不保存姓名明文</b>。需要说清楚的是：盐和哈希是一起上传的，所以这挡的是"服务端存明文名单"，
+      不是挡一个铁了心要反推的人（中文姓名的组合空间很小）。花名册本身仍然只存在班长手机里。</p>
   </div>
 
   <div class="card">
@@ -53,8 +54,8 @@
     <h2>四、保存多久、谁能看</h2>
     <ul class="list">
       <li><span class="grow">只有 <b data-cfg="operator">本班班长</b>（房间号 + PIN）能查看和导出点名记录</span></li>
-      <li><span class="grow">记录保留到班长主动删除为止</span></li>
-      <li><span class="grow">想删掉自己某条记录：直接找 <b data-cfg="operator">本班班长</b></span></li>
+      <li><span class="grow"><b>保留期限</b>：本机与云端都只保留<b>最近 60 场</b>点名记录，超出会自动淘汰；要长期保存请导成 Excel/CSV</span></li>
+      <li><span class="grow">班长可在「历史记录」里<b>删除单条记录</b>或<b>清空全部</b>；同学想删掉自己某条记录，直接找 <b data-cfg="operator">本班班长</b></span></li>
       <li><span class="grow">导出的 Excel/CSV 由班长保管，请勿转发给无关人员</span></li>
     </ul>
   </div>
@@ -71,12 +72,6 @@
 
 </div>
 <script src="config.js"></script>
-<script>
-(function(){
-  var op = (window.APP_CONFIG && window.APP_CONFIG.operator) || '本班班长';
-  var nodes = document.querySelectorAll('[data-cfg="operator"]');
-  for (var i = 0; i < nodes.length; i++) nodes[i].textContent = op;
-})();
-</script>
+<script src="privacy.js"></script>
 </body>
 </html>
