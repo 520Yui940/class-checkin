@@ -15,10 +15,20 @@ const crypto = require('crypto');
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const ROOT = __dirname;
-const VERSION = '2.1.0';
+const VERSION = (() => {
+  try { return require('./package.json').version; } catch (e) { return '0.0.0'; }
+})();
 // 同设备冷却：默认 10,000,000 秒（≈115 天）。因为冷却按场次判定，实际效果 = 「本节课这台设备签完就结束」，
 // 且「放行」一次后可再签一个名字，之后本场次内彻底锁死。下一节课（新场次）不受影响。
 const COOLDOWN_MS = Math.max(3000, Number(process.env.CHECKIN_COOLDOWN_MS) || 10000000000);
+const MAX_ROOMS = Math.max(20, Number(process.env.CHECKIN_MAX_ROOMS) || 200);        // 房间上限，防刷爆
+const KEEP_SESSIONS = Math.max(5, Number(process.env.CHECKIN_KEEP_SESSIONS) || 60);  // 每房间保留场次数
+const TRUST_XFF = process.env.CHECKIN_XFF !== 'off';  // 是否信任 X-Forwarded-For（部署在可信反代后才该开）
+// 限流：只在真正会造成破坏的写接口上卡脖子，且阈值留足"全班连同一个 WiFi"的空间
+const LIMITS = {
+  '/api/session': { windowMs: 600000, max: 6 },    // 建房/开点名：10 分钟最多 6 次
+  '/api/checkin': { windowMs: 60000, max: 200 }    // 提交：每分钟最多 200 次（一个班够用）
+};
 const COOLDOWN_TEXT = COOLDOWN_MS >= 3600000
   ? '本次点名这台设备已经签到过了（如需代签，请班长点「放行」）'
   : '同一台设备两次签到要间隔 ' + Math.round(COOLDOWN_MS / 1000) + ' 秒，请稍等';
@@ -64,7 +74,7 @@ function flush() {
     fs.renameSync(tmp, DB_FILE);
   } catch (e) { /* 磁盘问题不阻塞点名 */ }
 }
-setInterval(flush, 5000);
+setInterval(flush, 5000).unref(); // unref：不阻塞进程退出（也让单元测试能正常结束）
 process.on('SIGTERM', () => { flush(); process.exit(0); });
 process.on('SIGINT', () => { flush(); process.exit(0); });
 
@@ -73,7 +83,8 @@ function appendLog(obj) {
 }
 
 /* ---------------- 工具 ---------------- */
-const CN_NAME = /^[\u4e00-\u9fa5·]{2,10}$/;
+// 覆盖全部汉字（含扩展 A/B 区生僻字）+ 间隔号「·」，2-15 字（与前端保持一致）
+const CN_NAME = /^[\p{Script=Han}·]{2,15}$/u;
 const CODE_CHARS = 'ACDEFGHJKLMNPQRTUVWXY34679';
 
 function genCode() {
@@ -88,8 +99,27 @@ function genCode() {
 function roomOf(name) {
   const key = String(name || '').trim();
   if (!key) return null;
-  if (!db.rooms[key]) db.rooms[key] = { sessions: [] };
+  if (!db.rooms[key]) {
+    const keys = Object.keys(db.rooms);
+    if (keys.length >= MAX_ROOMS) {
+      // 满了就淘汰"最久没点过名、且没有进行中场次"的房间，避免被随机房间名刷爆磁盘
+      let victim = null, oldest = Infinity;
+      for (const k of keys) {
+        const sess = db.rooms[k].sessions || [];
+        if (sess.some((x) => x.status === 'open')) continue;
+        const last = sess.length ? Date.parse(sess[sess.length - 1].openedAt || 0) : 0;
+        if (last < oldest) { oldest = last; victim = k; }
+      }
+      if (victim) delete db.rooms[victim];
+    }
+    db.rooms[key] = { sessions: [] };
+  }
   return db.rooms[key];
+}
+
+// 保留最近 N 个场次（超出自动丢弃 —— 这点必须写在隐私说明里，别承诺"永久保留"）
+function trimSessions(r) {
+  if (r.sessions.length > KEEP_SESSIONS) r.sessions = r.sessions.slice(-KEEP_SESSIONS);
 }
 
 function findSession(code, roomName) {
@@ -103,10 +133,6 @@ function findSession(code, roomName) {
     }
   }
   return null;
-}
-
-function pinKey(room, pin) {
-  return crypto.createHash('sha256').update(String(room) + '|' + String(pin)).digest('hex').slice(0, 32);
 }
 
 function distance(lat1, lng1, lat2, lng2) {
@@ -168,7 +194,7 @@ async function ipGeo(ip) {
 function applyRosterCheck(session, body) {
   const salt = String(body.nameSalt || '').slice(0, 32);
   const hashes = Array.isArray(body.nameHashes)
-    ? body.nameHashes.map((h) => String(h).slice(0, 64)).filter(Boolean).slice(0, 400)
+    ? body.nameHashes.map((h) => String(h).slice(0, 64)).filter(Boolean).slice(0, 2000)
     : [];
   if (salt && hashes.length) {
     session.nameSalt = salt;
@@ -250,13 +276,22 @@ const MIME = {
   '.map': 'application/json; charset=utf-8'
 };
 
+const SEC_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'no-referrer',
+  'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; " +
+    "style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; " +
+    "frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+};
+
 function sendJson(res, code, obj) {
   const body = JSON.stringify(obj);
-  res.writeHead(code, {
+  res.writeHead(code, Object.assign({
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
     'Content-Length': Buffer.byteLength(body)
-  });
+  }, SEC_HEADERS));
   res.end(body);
 }
 
@@ -276,25 +311,56 @@ function readBody(req) {
   });
 }
 
+// 极简令牌桶（按 IP）：只用于挡住脚本刷写接口，不是精确配额
+const RATE_BUCKETS = new Map();
+function rateLimited(req, lim) {
+  const ip = clientIp(req) || 'unknown';
+  const now = Date.now();
+  let b = RATE_BUCKETS.get(ip);
+  if (!b || now - b.at > lim.windowMs) { b = { at: now, n: 0 }; RATE_BUCKETS.set(ip, b); }
+  b.n++;
+  if (RATE_BUCKETS.size > 5000) RATE_BUCKETS.clear(); // 防内存膨胀
+  return b.n > lim.max;
+}
+
+// 口令优先从请求头取（避免落到访问日志/浏览器历史/代理日志）；仍兼容 query 以便旧客户端
+function pinOf(req, q) {
+  const h = req.headers['x-pin-key'];
+  if (h) return String(h).slice(0, 64);
+  return q && q.pinKey ? String(q.pinKey).slice(0, 64) : '';
+}
+
 function clientIp(req) {
-  const fwd = req.headers['x-forwarded-for'];
-  if (fwd) return String(fwd).split(',')[0].trim().slice(0, 60);
+  // 注意：X-Forwarded-For 可被客户端伪造，所以基于 IP 的标黄只是"参考证据"，不是铁证。
+  // 部署在可信反代后面才该信任它；纯直连场景可设 CHECKIN_XFF=off 强制用 socket 地址。
+  if (TRUST_XFF) {
+    const fwd = req.headers['x-forwarded-for'];
+    if (fwd) {
+      const parts = String(fwd).split(',').map((x) => x.trim()).filter(Boolean);
+      if (parts.length) return parts[0].slice(0, 60);
+    }
+  }
   return String(req.socket.remoteAddress || '').slice(0, 60);
 }
+
+const STATIC_DENY = ['/server.js', '/package.json', '/package-lock.json', '/privacy.js.map'];
 
 function serveStatic(req, res, urlPath) {
   let p = decodeURIComponent(urlPath.split('?')[0]);
   if (p === '/' || p === '') p = '/index.html';
+  if (STATIC_DENY.indexOf(p) >= 0 || p.indexOf('/.') === 0) { res.writeHead(404); res.end('not found'); return; }
   if (p === '/privacy' || p === '/privacy/') p = '/privacy.html';
   const full = path.join(ROOT, path.normalize(p).replace(/^([/\\])+/, ''));
   if (!full.startsWith(ROOT)) { res.writeHead(403); res.end('forbidden'); return; }
   fs.stat(full, (err, st) => {
     if (err || !st.isFile()) { res.writeHead(404); res.end('not found'); return; }
-    res.writeHead(200, {
+    // 前端代码不缓存（改完立刻生效）；自带的第三方库长缓存（它们不随版本变化）
+    const isLib = p.indexOf('/libs/') === 0;
+    res.writeHead(200, Object.assign({
       'Content-Type': MIME[path.extname(full).toLowerCase()] || 'application/octet-stream',
       'Content-Length': st.size,
-      'Cache-Control': 'no-cache'
-    });
+      'Cache-Control': isLib ? 'public, max-age=604800' : 'no-cache'
+    }, SEC_HEADERS));
     fs.createReadStream(full).pipe(res);
   });
 }
@@ -308,7 +374,8 @@ const api = {
     const key = String((body && body.pinKey) || '').trim();
     if (!room || key.length < 8) return sendJson(res, 400, { ok: false, message: '房间或口令不完整' });
     const r = roomOf(room);
-    if (!r.pinKey) r.pinKey = key;
+    // 还没点过名的空房间允许重设口令 —— 否则有人先抢注一个房间名，真班长就被永久挡在门外
+    if (!r.pinKey || r.sessions.length === 0) r.pinKey = key;
     if (r.pinKey !== key) return sendJson(res, 403, { ok: false, message: '房间口令不对' });
     // 同一房间已有未关闭的场次 → 直接复用
     const open = r.sessions.find((s) => s.status === 'open');
@@ -328,11 +395,12 @@ const api = {
       lat: lat,
       lng: lng,
       radius: Number(body.radius) || 200,
+      ipCheck: body.ipCheck !== false, // 班长端可关闭（关闭后不把学生 IP 发给第三方）
       subs: []
     };
     applyRosterCheck(s, body);
     r.sessions.push(s);
-    if (r.sessions.length > 60) r.sessions = r.sessions.slice(-60);
+    trimSessions(r);
     save();
     return sendJson(res, 200, { ok: true, code: s.code, openedAt: s.openedAt });
   },
@@ -381,7 +449,6 @@ const api = {
       t,
       fp,
       ip: clientIp(req),
-      ua: String(body.ua || '').slice(0, 200),
       lat: numOrNull(body.lat, 90),
       lng: numOrNull(body.lng, 180),
       acc: acc,
@@ -472,7 +539,7 @@ const api = {
     s.subs.push(sub);
     if (rel) rel.used = true; // 这次豁免用掉了，之后本场次再签仍会被冷却挡住
     save();
-    enrichSubmission(s, sub);
+    if (s.ipCheck !== false) enrichSubmission(s, sub); // 只在开启的场次查 IP 归属地
     appendLog({ code: s.code, name, t: new Date(t).toISOString(), fp, ip: sub.ip, dist: sub.dist, flags: sub.flags });
     return sendJson(res, 200, {
       ok: true,
@@ -488,7 +555,8 @@ const api = {
   'GET /api/live/:code': (req, res, body, params, q) => {
     const hit = findSession(params.code, q.room);
     if (!hit) return sendJson(res, 404, { ok: false, message: '场次不存在' });
-    if (hit.session.status === 'open' && hit.room.pinKey && q.pinKey !== hit.room.pinKey) {
+    // 任何状态都必须带口令：场次关闭后 subs 里仍是全班的姓名/经纬度/IP/设备指纹
+    if (hit.room.pinKey && pinOf(req, q) !== hit.room.pinKey) {
       return sendJson(res, 403, { ok: false, message: '房间口令不对' });
     }
     const s = hit.session;
@@ -537,11 +605,35 @@ const api = {
     return sendJson(res, 200, { ok: true });
   },
 
+  /* 删除记录（班长端）：code 传具体场次码，或传 '*' 清空本房间所有已结束场次 */
+  'POST /api/delete': (req, res, body) => {
+    const room = String((body && body.room) || '').trim();
+    const key = String((body && body.pinKey) || '').trim();
+    const r = db.rooms[room];
+    if (!r) return sendJson(res, 404, { ok: false, message: '房间不存在' });
+    if (r.pinKey && r.pinKey !== key && pinOf(req, {}) !== r.pinKey) {
+      return sendJson(res, 403, { ok: false, message: '房间口令不对' });
+    }
+    const code = String((body && body.code) || '').toUpperCase();
+    if (code === '*') {
+      const before = r.sessions.length;
+      r.sessions = r.sessions.filter((x) => x.status === 'open'); // 保留进行中的，其余全删
+      save();
+      return sendJson(res, 200, { ok: true, deleted: before - r.sessions.length });
+    }
+    const i = r.sessions.findIndex((x) => x.code === code);
+    if (i < 0) return sendJson(res, 404, { ok: false, message: '场次不存在' });
+    if (r.sessions[i].status === 'open') return sendJson(res, 400, { ok: false, message: '进行中的点名不能删除，先结束' });
+    r.sessions.splice(i, 1);
+    save();
+    return sendJson(res, 200, { ok: true, deleted: 1 });
+  },
+
   /* 历史（班长端） */
   'GET /api/history': (req, res, body, params, q) => {
     const r = db.rooms[String(q.room || '')];
     if (!r) return sendJson(res, 200, { ok: true, sessions: [] });
-    if (r.pinKey && q.pinKey !== r.pinKey) return sendJson(res, 403, { ok: false, message: '房间口令不对' });
+    if (r.pinKey && pinOf(req, q) !== r.pinKey) return sendJson(res, 403, { ok: false, message: '房间口令不对' });
     const list = r.sessions.slice().reverse().map((s) => ({
       code: s.code, course: s.course, status: s.status,
       openedAt: s.openedAt, closedAt: s.closedAt,
@@ -554,7 +646,7 @@ const api = {
   'GET /api/report/:code': (req, res, body, params, q) => {
     const hit = findSession(params.code, q.room);
     if (!hit) return sendJson(res, 404, { ok: false, message: '场次不存在' });
-    if (hit.room.pinKey && q.pinKey !== hit.room.pinKey) return sendJson(res, 403, { ok: false, message: '房间口令不对' });
+    if (hit.room.pinKey && pinOf(req, q) !== hit.room.pinKey) return sendJson(res, 403, { ok: false, message: '房间口令不对' });
     hit.session.subs.forEach((sub) => enrichSubmission(hit.session, sub));
     return sendJson(res, 200, { ok: true, session: hit.session });
   },
@@ -579,6 +671,10 @@ const server = http.createServer(async (req, res) => {
     const m = pathname.match(/^\/api\/(s|live|report)\/([A-Za-z0-9]+)$/);
     const params = m ? { code: m[2] } : {};
     const route = m ? (req.method + ' /api/' + m[1] + '/:code') : (req.method + ' ' + pathname);
+    const lim = LIMITS[pathname];
+    if (lim && rateLimited(req, lim)) {
+      return sendJson(res, 429, { ok: false, message: '请求太频繁，请稍后再试' });
+    }
     const handler = api[route];
     if (!handler) return sendJson(res, 404, { ok: false, message: '接口不存在' });
     const body = req.method === 'POST' ? await readBody(req) : {};
@@ -596,6 +692,21 @@ const server = http.createServer(async (req, res) => {
   return serveStatic(req, res, pathname);
 });
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log('[class-checkin] v' + VERSION + ' listening on ' + PORT + ' | data: ' + DATA_DIR);
-});
+server.requestTimeout = 30000;   // 慢速上传占住连接的兜底
+server.headersTimeout = 20000;
+
+if (require.main === module) {
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log('[class-checkin] v' + VERSION + ' listening on ' + PORT + ' | data: ' + DATA_DIR);
+    console.log('[提示] 请务必通过 HTTPS 访问：浏览器只在安全上下文（HTTPS / localhost）提供定位与 crypto.subtle，'
+      + '用 HTTP 部署会导致定位失效、哈希退化。');
+  });
+}
+
+// 纯函数导出，供单元测试使用（node --test）
+module.exports = {
+  VERSION, CN_NAME, COOLDOWN_MS, MAX_ROOMS, KEEP_SESSIONS,
+  distance, numOrNull, inChina, nameHashOf, applyRosterCheck, trimSessions,
+  pinOf, clientIp, rateLimited, genCode, roomOf, findSession,
+  _db: () => db
+};
