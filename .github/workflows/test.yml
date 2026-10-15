@@ -1,0 +1,23 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: 单元测试
+        run: cd app && npm test
+      - name: 启动冒烟（应返回健康检查）
+        run: |
+          cd app && PORT=8791 node server.js &
+          for i in $(seq 1 20); do
+            if curl -sf http://127.0.0.1:8791/api/ping | grep -q ok; then echo "smoke ok"; exit 0; fi
+            sleep 0.5
+          done
+          echo "服务没起来"; exit 1
