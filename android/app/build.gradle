@@ -3,7 +3,13 @@ plugins {
 }
 
 // 站点域名：优先用 -PsiteHost=xxx 或 gradle.properties 里的 siteHost
-def siteHost = project.findProperty('siteHost') ?: 'class-checkin-41536.app.workbuddy.host'
+def siteHost = project.findProperty('siteHost') ?: 'your-domain.example.com'
+if (siteHost == 'your-domain.example.com') {
+    // 占位符没改就直接失败：避免 clone 下来打包完连到别人服务器上
+    throw new GradleException(
+        "请先把 android/gradle.properties 里的 siteHost 改成你自己的部署域名（不含 https://）"
+    )
+}
 
 def keystorePropsFile = rootProject.file('keystore.properties')
 def keystoreProps = new Properties()
@@ -19,8 +25,8 @@ android {
         applicationId 'com.classcheckin.app'
         minSdk 24
         targetSdk 34
-        versionCode 2
-        versionName '1.0.1'
+        versionCode 3
+        versionName '1.0.2'
         buildConfigField "String", "SITE_HOST", "\"${siteHost}\""
     }
 

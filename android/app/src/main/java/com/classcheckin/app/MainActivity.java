@@ -40,8 +40,7 @@ import java.io.OutputStream;
  */
 public class MainActivity extends Activity {
 
-    // 站点域名来自 gradle.properties 的 siteHost（换部署不用改代码）
-    private static final String SITE_HOST = BuildConfig.SITE_HOST;
+    private static final String SITE_HOST = "class-checkin-41536.app.workbuddy.host";
     private static final String START_URL = "https://" + SITE_HOST + "/";
     private static final int REQ_FILE = 1001;
     private static final int REQ_LOCATION = 1002;
@@ -76,7 +75,9 @@ public class MainActivity extends Activity {
         s.setBuiltInZoomControls(false);
         s.setUserAgentString(s.getUserAgentString() + " ClassCheckinApp/1.0");
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
-        WebView.setWebContentsDebuggingEnabled(true);
+        // 只在 debug 包开 WebView 调试：release 包一旦开启，USB 连上就能读走 WebView 里的
+        // localStorage（花名册、历史记录、房间口令）
+        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
 
         web.addJavascriptInterface(new Bridge(), "AndroidBridge");
 
